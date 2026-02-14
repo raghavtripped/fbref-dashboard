@@ -2,7 +2,7 @@
 FBref Scraper — Playwright browser with stealth anti-detection.
 Handles Cloudflare challenges, rate limiting, retry logic, and HTML caching.
 
-In headful mode, uses your real Chrome install with a persistent profile
+In headful mode, uses Brave browser with a persistent profile
 so Cloudflare sees a real browser and you can solve challenges manually.
 """
 
@@ -95,12 +95,13 @@ class FBrefScraper:
                 window.chrome = { runtime: {} };
             """)
         else:
-            # Headful: use real Chrome install with persistent profile
-            # This looks like a real user browser to Cloudflare
+            # Headful: use Brave browser with persistent profile
+            # Brave has built-in anti-fingerprinting — Cloudflare won't flag it
+            brave_path = "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
             self.ctx = self.pw.chromium.launch_persistent_context(
                 user_data_dir=str(PROFILE_DIR),
                 headless=False,
-                channel="chrome",  # Use real installed Chrome
+                executable_path=brave_path,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--no-sandbox",
@@ -113,7 +114,7 @@ class FBrefScraper:
                 Object.defineProperty(navigator, 'webdriver', { get: () => false });
             """)
 
-        mode = "headful (real Chrome)" if not self.headless else "headless"
+        mode = "headful (Brave)" if not self.headless else "headless"
         self.log(f"[BROWSER] Launched ({mode})")
 
     def stop(self):
