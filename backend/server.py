@@ -77,6 +77,7 @@ class ScrapeRequest(BaseModel):
     urls: list[str] = []
     competition: Optional[str] = None
     season: Optional[str] = None
+    headful: bool = False
 
 
 class ParseRequest(BaseModel):
@@ -167,7 +168,7 @@ def start_scrape(req: ScrapeRequest):
     if _status["running"]:
         raise HTTPException(409, "Scraper is already running")
     # Run in a real OS thread — Playwright sync API cannot run inside asyncio
-    t = threading.Thread(target=_run_scrape, args=(req.urls, req.competition, req.season), daemon=True)
+    t = threading.Thread(target=_run_scrape, args=(req.urls, req.competition, req.season, req.headful), daemon=True)
     t.start()
     return {"status": "started"}
 
@@ -185,7 +186,7 @@ def stop_scrape():
     return {"status": "stopping"}
 
 
-def _run_scrape(urls, comp=None, season=None):
+def _run_scrape(urls, comp=None, season=None, headful=False):
     """Background scraping task."""
     with _lock:
         _status.update(running=True, current="", log=[], progress=0, total=0, stop=False)
@@ -195,7 +196,7 @@ def _run_scrape(urls, comp=None, season=None):
         _status["log"] = _status["log"][-200:]
 
     try:
-        with FBrefScraper(headless=True, on_log=log) as scraper:
+        with FBrefScraper(headless=not headful, on_log=log) as scraper:
             if comp and season:
                 log(f"Discovering {comp} {season}...")
                 urls = scraper.discover(comp, season)

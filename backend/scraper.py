@@ -147,15 +147,36 @@ class FBrefScraper:
                 # Check for Cloudflare challenge
                 title = page.title()
                 if "Just a moment" in title or "Attention Required" in title:
-                    self.log("  [CLOUDFLARE] Challenge detected, waiting 15s...")
-                    time.sleep(15)
-                    try:
-                        page.wait_for_load_state("domcontentloaded", timeout=30000)
-                    except Exception:
-                        pass
-                    if "Just a moment" in page.title():
-                        self.log("  [CLOUDFLARE] Still blocked")
-                        continue
+                    if not self.headless:
+                        # Headful mode: wait for user to solve it manually
+                        self.log("  [WAITING] Solve the Cloudflare challenge in the browser window...")
+                        solved = False
+                        for _ in range(60):  # Poll for up to 120 seconds
+                            time.sleep(2)
+                            try:
+                                current_title = page.title()
+                            except Exception:
+                                break
+                            if "Just a moment" not in current_title and "Attention Required" not in current_title:
+                                self.log("  [OK] Cloudflare challenge solved!")
+                                # Wait a moment for the page to fully load after solve
+                                time.sleep(3)
+                                solved = True
+                                break
+                        if not solved:
+                            self.log("  [CLOUDFLARE] Timed out waiting for manual solve")
+                            continue
+                    else:
+                        # Headless mode: wait briefly and retry
+                        self.log("  [CLOUDFLARE] Challenge detected, waiting 15s...")
+                        time.sleep(15)
+                        try:
+                            page.wait_for_load_state("domcontentloaded", timeout=30000)
+                        except Exception:
+                            pass
+                        if "Just a moment" in page.title():
+                            self.log("  [CLOUDFLARE] Still blocked")
+                            continue
 
                 html = page.content()
 

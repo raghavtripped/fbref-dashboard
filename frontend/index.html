@@ -356,6 +356,7 @@ function ScraperView({onDone}) {
   const [urls, setUrls] = useState('');
   const [comp, setComp] = useState('premier-league');
   const [season, setSeason] = useState('2025-2026');
+  const [headful, setHeadful] = useState(true);
   const [status, setStatus] = useState(null);
   const [polling, setPolling] = useState(false);
   const logRef = useRef(null);
@@ -375,8 +376,8 @@ function ScraperView({onDone}) {
 
   const startScrape = () => {
     const body = mode === 'urls'
-      ? { urls: urls.split('\n').map(u=>u.trim()).filter(u=>u && u.includes('fbref.com')) }
-      : { competition: comp, season };
+      ? { urls: urls.split('\n').map(u=>u.trim()).filter(u=>u && u.includes('fbref.com')), headful }
+      : { competition: comp, season, headful };
     fetch(`${API}/api/scrape`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
       .then(r=>{if(r.ok){setPolling(true);setStatus({running:true,log:['Starting...'],progress:0,total:0})}});
   };
@@ -398,9 +399,15 @@ function ScraperView({onDone}) {
     <div>
       <div className="card">
         <div className="card-h">Scraper Controls</div>
-        <div style={{display:'flex',gap:8,marginBottom:12}}>
+        <div style={{display:'flex',gap:8,marginBottom:12,alignItems:'center'}}>
           <button className={`btn btn-sm ${mode==='urls'?'btn-g':''}`} onClick={()=>setMode('urls')}>URL List</button>
           <button className={`btn btn-sm ${mode==='discover'?'btn-g':''}`} onClick={()=>setMode('discover')}>Auto-Discover</button>
+          <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:6,cursor:'pointer'}} onClick={()=>setHeadful(h=>!h)}>
+            <div style={{width:32,height:18,borderRadius:9,background:headful?'var(--g)':'var(--b1)',transition:'.2s',position:'relative',flexShrink:0}}>
+              <div style={{width:14,height:14,borderRadius:7,background:'#fff',position:'absolute',top:2,left:headful?16:2,transition:'.2s'}}></div>
+            </div>
+            <span style={{fontSize:11,color:headful?'var(--g)':'var(--t3)',fontWeight:500,whiteSpace:'nowrap'}}>Show browser</span>
+          </div>
         </div>
 
         {mode === 'urls' ? (
@@ -447,7 +454,10 @@ function ScraperView({onDone}) {
         <div className="card-h">Live Log</div>
         <div className="log-box" ref={logRef}>
           {(status?.log || []).map((msg,i) => (
-            <div key={i} style={{color: msg.startsWith('✓') ? 'var(--g)' : msg.startsWith('✗') || msg.includes('ERROR') ? 'var(--r)' : msg.includes('⏳') ? 'var(--t3)' : 'var(--t2)'}}>{msg}</div>
+            <div key={i} style={{
+              color: msg.includes('[WAITING]') ? 'var(--a)' : msg.includes('challenge solved') ? 'var(--g)' : msg.startsWith('✓') ? 'var(--g)' : msg.startsWith('✗') || msg.includes('ERROR') ? 'var(--r)' : msg.includes('⏳') ? 'var(--t3)' : 'var(--t2)',
+              fontWeight: msg.includes('[WAITING]') ? 600 : 400,
+            }}>{msg}</div>
           ))}
           {(!status?.log || status.log.length === 0) && <div style={{color:'var(--t3)'}}>No activity yet. Start a scrape above.</div>}
         </div>
