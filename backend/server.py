@@ -162,11 +162,13 @@ def get_players(match_id: str):
 # ═══════════════════════════════════════════════════════
 
 @app.post("/api/scrape")
-def start_scrape(req: ScrapeRequest, bg: BackgroundTasks):
-    """Start a background scraping job."""
+def start_scrape(req: ScrapeRequest):
+    """Start a background scraping job in a separate thread."""
     if _status["running"]:
         raise HTTPException(409, "Scraper is already running")
-    bg.add_task(_run_scrape, req.urls, req.competition, req.season)
+    # Run in a real OS thread — Playwright sync API cannot run inside asyncio
+    t = threading.Thread(target=_run_scrape, args=(req.urls, req.competition, req.season), daemon=True)
+    t.start()
     return {"status": "started"}
 
 
