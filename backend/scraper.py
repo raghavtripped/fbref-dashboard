@@ -50,7 +50,9 @@ def extract_match_urls(html, comp_slug=None):
     Falls back to regex when BeautifulSoup parsing finds nothing."""
     # Primary method: parse the schedule table properly with BeautifulSoup
     # This only picks up played matches (with "Match Report" links), not future ones ("Head-to-Head")
-    soup = BeautifulSoup(html, "html.parser")
+    # IMPORTANT: FBref hides tables inside <!-- --> HTML comments, so strip them first
+    clean_html = html.replace("<!--", "").replace("-->", "")
+    soup = BeautifulSoup(clean_html, "html.parser")
     urls = []
     seen = set()
 
