@@ -12,6 +12,7 @@ import hashlib
 import re
 import os
 from pathlib import Path
+from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 
 
@@ -44,14 +45,44 @@ def cache_path(url):
     return CACHE_DIR / f"{hashlib.md5(url.encode()).hexdigest()[:12]}.html"
 
 
-def extract_match_urls(html):
-    """Extract all match report URLs from a schedule/fixtures page."""
-    raw = re.findall(r"/en/matches/[a-f0-9]+/[A-Za-z0-9\-]+", html)
-    seen, urls = set(), []
-    for p in raw:
-        if p not in seen:
-            seen.add(p)
-            urls.append(f"https://fbref.com{p}")
+def extract_match_urls(html, comp_slug=None):
+    """Extract match report URLs, optionally filtered by competition slug.
+    Falls back to regex when BeautifulSoup parsing finds nothing."""
+    # Primary method: parse the schedule table properly with BeautifulSoup
+    # This only picks up played matches (with "Match Report" links), not future ones ("Head-to-Head")
+    soup = BeautifulSoup(html, "html.parser")
+    urls = []
+    seen = set()
+
+    for td in soup.find_all("td", {"data-stat": "match_report"}):
+        a = td.find("a")
+        if not a:
+            continue
+        text = a.get_text(strip=True)
+        href = a.get("href", "")
+
+        # Only "Match Report" links, not "Head-to-Head"
+        if text != "Match Report" or "/matches/" not in href:
+            continue
+
+        # Filter by competition slug if provided
+        if comp_slug and not href.lower().endswith(comp_slug.lower()):
+            continue
+
+        if href not in seen:
+            seen.add(href)
+            urls.append(f"https://fbref.com{href}")
+
+    # Fallback: regex-based extraction if table parsing found nothing
+    if not urls:
+        raw = re.findall(r"/en/matches/[a-f0-9]+/[A-Za-z0-9\-]+", html)
+        for p in raw:
+            if p not in seen:
+                seen.add(p)
+                if comp_slug and not p.lower().endswith(comp_slug.lower()):
+                    continue
+                urls.append(f"https://fbref.com{p}")
+
     return urls
 
 
@@ -229,11 +260,19 @@ class FBrefScraper:
         if not cid:
             raise ValueError(f"Unknown competition: {comp}. Known: {list(COMP_IDS.keys())}")
         cn = comp.replace("-", " ").title().replace(" ", "-")
-        schedule_url = f"https://fbref.com/en/comps/{cid}/{season}/schedule/{season}-{cn}-Scores-and-Fixtures"
+
+        # Build schedule URL — with or without season
+        if season:
+            schedule_url = f"https://fbref.com/en/comps/{cid}/{season}/schedule/{season}-{cn}-Scores-and-Fixtures"
+        else:
+            schedule_url = f"https://fbref.com/en/comps/{cid}/schedule/{cn}-Scores-and-Fixtures"
+
         self.log(f"[DISCOVER] Fetching schedule: {schedule_url}")
         html = self.fetch(schedule_url)
-        urls = extract_match_urls(html)
-        self.log(f"[DISCOVER] Found {len(urls)} match URLs")
+
+        # Filter by competition slug — only played matches with "Match Report" links
+        urls = extract_match_urls(html, comp_slug=cn)
+        self.log(f"[DISCOVER] Found {len(urls)} played match URLs for {cn}")
         return urls
 
     def __enter__(self):
