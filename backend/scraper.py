@@ -133,7 +133,10 @@ class FBrefScraper:
                     time.sleep(random.uniform(2, 5))
 
                 self.log(f"[FETCH] Attempt {attempt + 1}/3: {url.split('/')[-2] if '/' in url else url}")
-                resp = page.goto(url, wait_until="networkidle", timeout=60000)
+                resp = page.goto(url, wait_until="domcontentloaded", timeout=90000)
+
+                # Give the page a few seconds for JS to render remaining content
+                time.sleep(random.uniform(3, 6))
 
                 if resp and resp.status == 429:
                     wait_time = 120 + random.uniform(0, 60)
@@ -147,7 +150,7 @@ class FBrefScraper:
                     self.log("  [CLOUDFLARE] Challenge detected, waiting 15s...")
                     time.sleep(15)
                     try:
-                        page.wait_for_load_state("networkidle", timeout=30000)
+                        page.wait_for_load_state("domcontentloaded", timeout=30000)
                     except Exception:
                         pass
                     if "Just a moment" in page.title():
@@ -160,7 +163,7 @@ class FBrefScraper:
                     self.log(f"  [WARN] Response too short ({len(html)} chars)")
                     continue
 
-                if "scorebox" not in html and "team_stats" not in html:
+                if "scorebox" not in html and "team_stats" not in html and "sched" not in html and "scores" not in html.lower():
                     if "404" in (page.title() or "") or "Not Found" in (page.title() or ""):
                         raise RuntimeError("PAGE_NOT_FOUND")
                     self.log("  [WARN] Missing expected elements")
