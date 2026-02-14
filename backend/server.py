@@ -7,6 +7,7 @@ import json
 import csv
 import io
 import os
+import re
 import threading
 import time
 import random
@@ -22,7 +23,7 @@ from pydantic import BaseModel
 from contextlib import asynccontextmanager
 
 from parser import parse_match_report, flatten_match
-from scraper import FBrefScraper, cache_path, CACHE_DIR
+from scraper import FBrefScraper, cache_path, CACHE_DIR, extract_match_urls
 
 
 # --- Data persistence ---
@@ -200,6 +201,23 @@ def _run_scrape(urls, comp=None, season=None, headful=False):
             if comp and season:
                 log(f"Discovering {comp} {season}...")
                 urls = scraper.discover(comp, season)
+            elif urls:
+                # Check if any URL is a schedule/fixtures page — expand it into match URLs
+                expanded = []
+                for u in urls:
+                    if "/comps/" in u and ("schedule" in u or "Scores-and-Fixtures" in u):
+                        log(f"[DISCOVER] Detected schedule URL, fetching match list...")
+                        html = scraper.fetch(u)
+                        # Try to extract comp slug from the URL for filtering
+                        # e.g. ".../Premier-League-Scores-and-Fixtures" → "Premier-League"
+                        slug_match = re.search(r"/([\w-]+)-Scores-and-Fixtures", u)
+                        comp_slug = slug_match.group(1) if slug_match else None
+                        found = extract_match_urls(html, comp_slug=comp_slug)
+                        log(f"[DISCOVER] Found {len(found)} played match URLs")
+                        expanded.extend(found)
+                    else:
+                        expanded.append(u)
+                urls = expanded
 
             _status["total"] = len(urls)
             log(f"Starting scrape of {len(urls)} URLs...")
