@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FBref Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#08090c;--s1:#10131a;--s2:#171c26;--s3:#1e2433;
+  --b1:#252d3d;--b2:#333d52;
+  --t1:#e4e8f0;--t2:#8b95aa;--t3:#566075;
+  --g:#34d399;--gd:rgba(52,211,153,.1);
+  --r:#f87171;--rd:rgba(248,113,113,.1);
+  --a:#fbbf24;--ad:rgba(251,191,36,.1);
+  --bl:#60a5fa;--bld:rgba(96,165,250,.1);
+  --rad:8px;--radl:12px
+}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--t1);min-height:100vh;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--b1);border-radius:3px}
+.app{max-width:1440px;margin:0 auto;padding:20px 24px}
+
+/* Header */
+.hdr{display:flex;align-items:center;justify-content:space-between;padding-bottom:20px;border-bottom:1px solid var(--b1);margin-bottom:20px}
+.hdr h1{font-size:20px;font-weight:700;letter-spacing:-.4px;display:flex;align-items:center;gap:8px}
+.hdr .dot{width:7px;height:7px;border-radius:50%;background:var(--g);box-shadow:0 0 8px var(--g)}
+.hdr-r{display:flex;gap:8px;align-items:center}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:var(--rad);font-family:inherit;font-size:12px;font-weight:500;border:1px solid var(--b1);background:var(--s2);color:var(--t1);cursor:pointer;transition:.15s;white-space:nowrap}
+.btn:hover{border-color:var(--b2);background:var(--s3)}
+.btn-g{background:var(--g);color:var(--bg);border-color:var(--g);font-weight:600}
+.btn-g:hover{background:#2bc48a}
+.btn-r{background:var(--r);color:#fff;border-color:var(--r);font-weight:600}
+.btn-sm{padding:4px 9px;font-size:11px}
+
+/* Tabs */
+.tabs{display:flex;gap:2px;margin-bottom:20px;background:var(--s1);border-radius:var(--rad);padding:3px;border:1px solid var(--b1);width:fit-content}
+.tab{padding:7px 15px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;color:var(--t3);border:none;background:none;transition:.15s;font-family:inherit}
+.tab:hover{color:var(--t2)}
+.tab.on{background:var(--s3);color:var(--t1)}
+
+/* Stats grid */
+.sg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:20px}
+.sc{background:var(--s1);border:1px solid var(--b1);border-radius:var(--radl);padding:14px 12px;text-align:center}
+.sv{font-size:28px;font-weight:700;letter-spacing:-1px;font-family:'JetBrains Mono',monospace}
+.sl{font-size:10px;color:var(--t3);margin-top:3px;text-transform:uppercase;letter-spacing:.5px}
+
+/* Cards */
+.card{background:var(--s1);border:1px solid var(--b1);border-radius:var(--radl);padding:16px;margin-bottom:16px}
+.card-h{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--t3);margin-bottom:10px}
+
+/* Table */
+.tw{overflow-x:auto;border:1px solid var(--b1);border-radius:var(--radl)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{padding:8px 12px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--t3);background:var(--s1);border-bottom:1px solid var(--b1);position:sticky;top:0;white-space:nowrap;cursor:pointer}
+thead th:hover{color:var(--t2)}
+tbody td{padding:8px 12px;border-bottom:1px solid rgba(37,45,61,.5);white-space:nowrap;font-family:'JetBrains Mono',monospace;font-size:11px}
+tbody tr{transition:background .1s}
+tbody tr:hover{background:var(--s2)}
+
+/* Pills */
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;letter-spacing:.3px}
+.pill-g{background:var(--gd);color:var(--g)}
+.pill-r{background:var(--rd);color:var(--r)}
+.pill-a{background:var(--ad);color:var(--a)}
+.pill-bl{background:var(--bld);color:var(--bl)}
+
+/* Layout */
+.cols{display:grid;grid-template-columns:1fr 320px;gap:16px}
+@media(max-width:900px){.cols{grid-template-columns:1fr}}
+
+/* Badge */
+.badge{background:var(--s3);padding:3px 9px;border-radius:99px;font-size:11px;color:var(--t2);font-weight:500}
+
+/* Filters */
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+.inp{padding:7px 11px;border-radius:var(--rad);border:1px solid var(--b1);background:var(--s2);color:var(--t1);font-family:inherit;font-size:12px;outline:none;min-width:130px}
+.inp:focus{border-color:var(--g)}
+select.inp{cursor:pointer}
+textarea.inp{resize:vertical;font-family:'JetBrains Mono',monospace;font-size:12px;min-height:100px;width:100%}
+
+/* Modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.modal{background:var(--s1);border:1px solid var(--b1);border-radius:var(--radl);padding:24px;max-width:860px;width:95%;max-height:85vh;overflow-y:auto}
+.modal-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.modal-h h2{font-size:18px;font-weight:700}
+
+/* Progress */
+.prog-bar{width:100%;height:6px;background:var(--s3);border-radius:3px;overflow:hidden;margin:8px 0}
+.prog-fill{height:100%;background:var(--g);border-radius:3px;transition:width .3s}
+
+/* Log */
+.log-box{background:var(--bg);border:1px solid var(--b1);border-radius:var(--rad);padding:10px;max-height:200px;overflow-y:auto;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.7;color:var(--t2)}
+
+/* Player tabs */
+.ptabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px}
+.ptab{padding:3px 10px;border-radius:4px;font-size:10px;cursor:pointer;color:var(--t3);border:1px solid var(--b1);background:var(--s2);font-family:inherit;font-weight:500}
+.ptab.on{background:var(--bl);color:#fff;border-color:var(--bl)}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState, useEffect, useMemo, useRef, useCallback} = React;
+const API = '';  // Same origin
+
+function useApi(path) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const load = useCallback(() => {
+    setLoading(true);
+    fetch(`${API}${path}`).then(r => r.json()).then(d => { setData(d); setLoading(false); }).catch(() => setLoading(false));
+  }, [path]);
+  useEffect(() => { load(); }, [load]);
+  return { data, loading, reload: load };
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAIN APP
+// ═══════════════════════════════════════════════════════════
+function App() {
+  const [tab, setTab] = useState('dashboard');
+  const [sel, setSel] = useState(null);
+  const { data: matchData, loading, reload } = useApi('/api/matches');
+  const matches = matchData?.matches || [];
+
+  const stats = useMemo(() => {
+    const oc = {HOME_WIN:0,AWAY_WIN:0,DRAW:0};
+    let tg=0, tc=0, teams=new Set(), refs=new Set();
+    matches.forEach(m => {
+      oc[m.outcome]++; tg+=(m.home_goals||0)+(m.away_goals||0); tc+=(m.total_cards||0);
+      teams.add(m.home_team); teams.add(m.away_team); if(m.referee) refs.add(m.referee);
+    });
+    return {n:matches.length, oc, tg, tc, avg:matches.length ? +(tg/matches.length).toFixed(2) : 0, teams:teams.size, refs:[...refs]};
+  },[matches]);
+
+  return (
+    <div className="app">
+      <div className="hdr">
+        <h1><span className="dot"></span>FBref Dashboard</h1>
+        <div className="hdr-r">
+          <span className="badge">{matches.length} matches</span>
+          <button className="btn" onClick={reload}>&#8635; Refresh</button>
+          <button className="btn" onClick={() => {
+            if(matches.length === 0) return;
+            window.open(`${API}/api/export/csv`, '_blank');
+          }}>&#11015; CSV</button>
+        </div>
+      </div>
+      <div className="tabs">
+        {[['dashboard','Overview'],['matches','Matches'],['scraper','Scraper'],['manual','Manual Input']].map(([k,l]) => (
+          <button key={k} className={`tab ${tab===k?'on':''}`} onClick={()=>setTab(k)}>{l}</button>
+        ))}
+      </div>
+      {loading && matches.length === 0 && <div style={{textAlign:'center',padding:40,color:'var(--t3)'}}>Loading...</div>}
+      {tab==='dashboard' && <Dashboard stats={stats} matches={matches} />}
+      {tab==='matches' && <MatchTable matches={matches} onSel={setSel} />}
+      {tab==='scraper' && <ScraperView onDone={reload} />}
+      {tab==='manual' && <ManualView onDone={reload} />}
+      {sel && <Modal m={sel} onClose={()=>setSel(null)} />}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════
+function Dashboard({stats, matches}) {
+  const topRefs = useMemo(() => {
+    const rc={}; matches.forEach(m=>{if(m.referee) rc[m.referee]=(rc[m.referee]||0)+1});
+    return Object.entries(rc).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  },[matches]);
+
+  const topTeams = useMemo(() => {
+    const tc={}; matches.forEach(m=>{tc[m.home_team]=(tc[m.home_team]||0)+1;tc[m.away_team]=(tc[m.away_team]||0)+1});
+    return Object.entries(tc).sort((a,b)=>b[1]-a[1]);
+  },[matches]);
+
+  const teamRanking = useMemo(() => {
+    const tm = {};
+    matches.forEach(m => {
+      if(!tm[m.home_team]) tm[m.home_team] = {p:0,gf:0,ga:0,pts:0};
+      if(!tm[m.away_team]) tm[m.away_team] = {p:0,gf:0,ga:0,pts:0};
+      tm[m.home_team].p++; tm[m.away_team].p++;
+      tm[m.home_team].gf += (m.home_goals||0); tm[m.home_team].ga += (m.away_goals||0);
+      tm[m.away_team].gf += (m.away_goals||0); tm[m.away_team].ga += (m.home_goals||0);
+      if(m.outcome==='HOME_WIN') tm[m.home_team].pts += 3;
+      else if(m.outcome==='AWAY_WIN') tm[m.away_team].pts += 3;
+      else { tm[m.home_team].pts += 1; tm[m.away_team].pts += 1; }
+    });
+    return Object.entries(tm).map(([name,s])=>({name,...s,gd:s.gf-s.ga})).sort((a,b)=>b.pts-a.pts||b.gd-a.gd);
+  },[matches]);
+
+  if(matches.length === 0) return (
+    <div style={{textAlign:'center',padding:60,color:'var(--t3)'}}>
+      <div style={{fontSize:40,marginBottom:12}}>&#9917;</div>
+      <div style={{fontSize:16,fontWeight:600,marginBottom:8}}>No matches yet</div>
+      <div style={{fontSize:13}}>Use the Scraper tab to fetch data from FBref, or the Manual Input tab to paste HTML.</div>
+    </div>
+  );
+
+  return (<>
+    <div className="sg">
+      <div className="sc"><div className="sv">{stats.n}</div><div className="sl">Matches</div></div>
+      <div className="sc"><div className="sv">{stats.tg}</div><div className="sl">Total Goals</div></div>
+      <div className="sc"><div className="sv">{stats.avg}</div><div className="sl">Goals / Match</div></div>
+      <div className="sc"><div className="sv">{stats.tc}</div><div className="sl">Total Cards</div></div>
+      <div className="sc"><div className="sv" style={{color:'var(--g)'}}>{stats.oc.HOME_WIN}</div><div className="sl">Home Wins</div></div>
+      <div className="sc"><div className="sv" style={{color:'var(--a)'}}>{stats.oc.DRAW}</div><div className="sl">Draws</div></div>
+      <div className="sc"><div className="sv" style={{color:'var(--r)'}}>{stats.oc.AWAY_WIN}</div><div className="sl">Away Wins</div></div>
+      <div className="sc"><div className="sv">{stats.teams}</div><div className="sl">Teams</div></div>
+    </div>
+
+    <div className="cols">
+      <div>
+        {/* Standings */}
+        <div className="card">
+          <div className="card-h">Standings (from scraped data)</div>
+          <div style={{fontFamily:'JetBrains Mono',fontSize:10}}>
+            <div style={{display:'grid',gridTemplateColumns:'24px 1fr 30px 30px 30px 36px',gap:4,color:'var(--t3)',marginBottom:6,fontSize:9}}>
+              <span>#</span><span>Team</span><span>P</span><span>GF</span><span>GA</span><span style={{textAlign:'right'}}>Pts</span>
+            </div>
+            {teamRanking.map((t,i)=>(
+              <div key={t.name} style={{display:'grid',gridTemplateColumns:'24px 1fr 30px 30px 30px 36px',gap:4,color:'var(--t2)',padding:'3px 0',borderTop:i?'1px solid var(--b1)':'none'}}>
+                <span style={{color:'var(--t3)'}}>{i+1}</span>
+                <span style={{color:'var(--t1)',fontWeight:500}}>{t.name}</span>
+                <span>{t.p}</span><span>{t.gf}</span><span>{t.ga}</span>
+                <span style={{textAlign:'right',fontWeight:700,color:'var(--t1)'}}>{t.pts}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Teams */}
+        <div className="card">
+          <div className="card-h">Teams by appearances</div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:6}}>{topTeams.map(([t,c])=>(<span key={t} className="pill pill-bl">{t} ({c})</span>))}</div>
+        </div>
+      </div>
+      <div>
+        {/* Referees */}
+        <div className="card">
+          <div className="card-h">Top Referees</div>
+          {topRefs.map(([r,c])=>(
+            <div key={r} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',fontSize:13}}>
+              <span>{r}</span>
+              <span style={{color:'var(--t3)',fontFamily:'JetBrains Mono',fontSize:12}}>{c} match{c>1?'es':''}</span>
+            </div>
+          ))}
+        </div>
+        {/* Outcome breakdown */}
+        <div className="card">
+          <div className="card-h">Outcome Distribution</div>
+          {stats.n > 0 && (
+            <div style={{display:'flex',gap:2,height:24,borderRadius:6,overflow:'hidden',marginBottom:8}}>
+              <div style={{width:`${(stats.oc.HOME_WIN/stats.n)*100}%`,background:'var(--g)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:'var(--bg)',minWidth:stats.oc.HOME_WIN?28:0}}>{stats.oc.HOME_WIN}H</div>
+              <div style={{width:`${(stats.oc.DRAW/stats.n)*100}%`,background:'var(--a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:'var(--bg)',minWidth:stats.oc.DRAW?24:0}}>{stats.oc.DRAW}D</div>
+              <div style={{width:`${(stats.oc.AWAY_WIN/stats.n)*100}%`,background:'var(--r)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:'#fff',minWidth:stats.oc.AWAY_WIN?28:0}}>{stats.oc.AWAY_WIN}A</div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+
+    {/* Recent matches */}
+    <div className="card">
+      <div className="card-h">Recent Matches</div>
+      <MiniTable ms={matches.slice(0,10)} />
+    </div>
+  </>);
+}
+
+// ═══════════════════════════════════════════════════════════
+// MINI TABLE
+// ═══════════════════════════════════════════════════════════
+function MiniTable({ms, onSel}) {
+  return (<div className="tw"><table>
+    <thead><tr><th>Date</th><th>Home</th><th></th><th>Score</th><th></th><th>Away</th><th>Referee</th><th>Cards</th></tr></thead>
+    <tbody>{ms.map((m,i)=>(<tr key={i} style={{cursor:onSel?'pointer':undefined}} onClick={()=>onSel&&onSel(m)}>
+      <td style={{color:'var(--t3)'}}>{m.date||'—'}</td>
+      <td style={{fontFamily:'DM Sans',fontWeight:m.outcome==='HOME_WIN'?600:400}}>{m.home_team}</td>
+      <td style={{color:'var(--t3)',fontSize:10}}>{m.home_xg!=null?`(${Number(m.home_xg).toFixed(1)})`:''}</td>
+      <td style={{fontWeight:600,textAlign:'center'}}>
+        <span className={m.outcome==='HOME_WIN'?'pill pill-g':m.outcome==='AWAY_WIN'?'pill pill-r':'pill pill-a'}>
+          {m.home_goals} - {m.away_goals}
+        </span>
+      </td>
+      <td style={{color:'var(--t3)',fontSize:10}}>{m.away_xg!=null?`(${Number(m.away_xg).toFixed(1)})`:''}</td>
+      <td style={{fontFamily:'DM Sans',fontWeight:m.outcome==='AWAY_WIN'?600:400}}>{m.away_team}</td>
+      <td style={{color:'var(--t3)'}}>{m.referee||'—'}</td>
+      <td><span className="pill pill-a">{m.total_cards||0}</span></td>
+    </tr>))}</tbody>
+  </table></div>);
+}
+
+// ═══════════════════════════════════════════════════════════
+// MATCH TABLE (Full)
+// ═══════════════════════════════════════════════════════════
+function MatchTable({matches, onSel}) {
+  const [f, setF] = useState({team:'',ref:'',oc:''});
+  const cols=[
+    {k:'date',l:'Date'},{k:'home_team',l:'Home'},{k:'home_goals',l:'HG'},{k:'away_goals',l:'AG'},
+    {k:'away_team',l:'Away'},{k:'outcome',l:'Result'},{k:'home_xg',l:'HxG'},{k:'away_xg',l:'AxG'},
+    {k:'home_possession',l:'HPoss'},{k:'away_possession',l:'APoss'},
+    {k:'home_shots_total',l:'HSh'},{k:'away_shots_total',l:'ASh'},
+    {k:'home_fouls',l:'HF'},{k:'away_fouls',l:'AF'},
+    {k:'total_cards',l:'Cards'},{k:'referee',l:'Referee'},{k:'attendance',l:'Att'}
+  ];
+
+  const data = useMemo(() => {
+    let d = [...matches];
+    if(f.team) d = d.filter(m => (m.home_team||'').toLowerCase().includes(f.team.toLowerCase()) || (m.away_team||'').toLowerCase().includes(f.team.toLowerCase()));
+    if(f.ref) d = d.filter(m => (m.referee||'').toLowerCase().includes(f.ref.toLowerCase()));
+    if(f.oc) d = d.filter(m => m.outcome === f.oc);
+    return d;
+  },[matches,f]);
+
+  return (<>
+    <div className="filters">
+      <input className="inp" placeholder="Filter team..." value={f.team} onChange={e=>setF(x=>({...x,team:e.target.value}))}/>
+      <input className="inp" placeholder="Filter referee..." value={f.ref} onChange={e=>setF(x=>({...x,ref:e.target.value}))}/>
+      <select className="inp" value={f.oc} onChange={e=>setF(x=>({...x,oc:e.target.value}))}>
+        <option value="">All outcomes</option>
+        <option value="HOME_WIN">Home Win</option>
+        <option value="AWAY_WIN">Away Win</option>
+        <option value="DRAW">Draw</option>
+      </select>
+      <span className="badge">{data.length} shown</span>
+    </div>
+    <div className="tw" style={{maxHeight:'68vh',overflowY:'auto'}}>
+      <table><thead><tr>{cols.map(c=><th key={c.k}>{c.l}</th>)}</tr></thead>
+      <tbody>{data.map((m,i)=><tr key={i} onClick={()=>onSel(m)} style={{cursor:'pointer'}}>
+        {cols.map(c=>{
+          let v = m[c.k];
+          if(c.k==='outcome') return <td key={c.k}><span className={`pill ${v==='HOME_WIN'?'pill-g':v==='AWAY_WIN'?'pill-r':'pill-a'}`}>{v==='HOME_WIN'?'H':v==='AWAY_WIN'?'A':'D'}</span></td>;
+          if(c.k==='attendance') return <td key={c.k}>{v ? Number(v).toLocaleString() : '—'}</td>;
+          if(c.k==='home_xg'||c.k==='away_xg') return <td key={c.k}>{v!=null ? Number(v).toFixed(1) : '—'}</td>;
+          return <td key={c.k}>{v ?? '—'}</td>;
+        })}
+      </tr>)}</tbody></table>
+    </div>
+  </>);
+}
+
+// ═══════════════════════════════════════════════════════════
+// SCRAPER CONTROLS
+// ═══════════════════════════════════════════════════════════
+function ScraperView({onDone}) {
+  const [mode, setMode] = useState('urls'); // urls | discover
+  const [urls, setUrls] = useState('');
+  const [comp, setComp] = useState('premier-league');
+  const [season, setSeason] = useState('2025-2026');
+  const [status, setStatus] = useState(null);
+  const [polling, setPolling] = useState(false);
+  const logRef = useRef(null);
+
+  // Poll status while scraping
+  useEffect(() => {
+    if(!polling) return;
+    const iv = setInterval(() => {
+      fetch(`${API}/api/scraper/status`).then(r=>r.json()).then(s => {
+        setStatus(s);
+        if(!s.running) { setPolling(false); onDone(); }
+        if(logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+      }).catch(()=>{});
+    }, 2000);
+    return () => clearInterval(iv);
+  },[polling, onDone]);
+
+  const startScrape = () => {
+    const body = mode === 'urls'
+      ? { urls: urls.split('\n').map(u=>u.trim()).filter(u=>u && u.includes('fbref.com')) }
+      : { competition: comp, season };
+    fetch(`${API}/api/scrape`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
+      .then(r=>{if(r.ok){setPolling(true);setStatus({running:true,log:['Starting...'],progress:0,total:0})}});
+  };
+
+  const stopScrape = () => {
+    fetch(`${API}/api/scraper/stop`, {method:'POST'});
+  };
+
+  const parseCached = () => {
+    fetch(`${API}/api/parse-cached`, {method:'POST'}).then(r=>r.json()).then(d => {
+      alert(`Parsed ${d.parsed} new matches. Total: ${d.total}. Errors: ${d.errors?.length||0}`);
+      onDone();
+    });
+  };
+
+  const pct = status?.total > 0 ? Math.round((status.progress / status.total) * 100) : 0;
+
+  return (<div className="cols">
+    <div>
+      <div className="card">
+        <div className="card-h">Scraper Controls</div>
+        <div style={{display:'flex',gap:8,marginBottom:12}}>
+          <button className={`btn btn-sm ${mode==='urls'?'btn-g':''}`} onClick={()=>setMode('urls')}>URL List</button>
+          <button className={`btn btn-sm ${mode==='discover'?'btn-g':''}`} onClick={()=>setMode('discover')}>Auto-Discover</button>
+        </div>
+
+        {mode === 'urls' ? (
+          <div style={{marginBottom:12}}>
+            <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--t3)',marginBottom:5,textTransform:'uppercase',letterSpacing:'.5px'}}>Paste FBref match URLs (one per line)</label>
+            <textarea className="inp" value={urls} onChange={e=>setUrls(e.target.value)}
+              placeholder={"https://fbref.com/en/matches/33167c49/Brentford-Arsenal-...\nhttps://fbref.com/en/matches/abc123/Liverpool-Chelsea-..."} />
+          </div>
+        ) : (
+          <div style={{display:'flex',gap:8,marginBottom:12}}>
+            <select className="inp" value={comp} onChange={e=>setComp(e.target.value)}>
+              {['premier-league','la-liga','serie-a','bundesliga','ligue-1','champions-league','mls'].map(c=>(
+                <option key={c} value={c}>{c.replace(/-/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</option>
+              ))}
+            </select>
+            <input className="inp" value={season} onChange={e=>setSeason(e.target.value)} placeholder="2025-2026" style={{width:120}} />
+          </div>
+        )}
+
+        <div style={{display:'flex',gap:8}}>
+          {!status?.running ? (
+            <button className="btn btn-g" onClick={startScrape}>&#9654; Start Scraping</button>
+          ) : (
+            <button className="btn btn-r" onClick={stopScrape}>&#9632; Stop</button>
+          )}
+          <button className="btn" onClick={parseCached}>Parse Cached HTML</button>
+        </div>
+      </div>
+
+      {/* Progress */}
+      {status && (
+        <div className="card">
+          <div className="card-h">Progress</div>
+          <div style={{display:'flex',justifyContent:'space-between',fontSize:12,color:'var(--t2)',marginBottom:4}}>
+            <span>{status.running ? `Scraping: ${status.current||'...'}` : 'Idle'}</span>
+            <span>{status.progress || 0} / {status.total || 0} ({pct}%)</span>
+          </div>
+          <div className="prog-bar"><div className="prog-fill" style={{width:`${pct}%`}}></div></div>
+        </div>
+      )}
+
+      {/* Live Log */}
+      <div className="card">
+        <div className="card-h">Live Log</div>
+        <div className="log-box" ref={logRef}>
+          {(status?.log || []).map((msg,i) => (
+            <div key={i} style={{color: msg.startsWith('✓') ? 'var(--g)' : msg.startsWith('✗') || msg.includes('ERROR') ? 'var(--r)' : msg.includes('⏳') ? 'var(--t3)' : 'var(--t2)'}}>{msg}</div>
+          ))}
+          {(!status?.log || status.log.length === 0) && <div style={{color:'var(--t3)'}}>No activity yet. Start a scrape above.</div>}
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div className="card">
+        <div className="card-h">How it works</div>
+        <div style={{fontSize:13,lineHeight:1.8,color:'var(--t2)'}}>
+          <p><strong style={{color:'var(--t1)'}}>1.</strong> Paste URLs or auto-discover a season</p>
+          <p><strong style={{color:'var(--t1)'}}>2.</strong> Playwright browser fetches pages (30-75s delays)</p>
+          <p><strong style={{color:'var(--t1)'}}>3.</strong> HTML cached locally — re-runs skip fetched</p>
+          <p><strong style={{color:'var(--t1)'}}>4.</strong> Parser extracts 49+ stats per match</p>
+          <p><strong style={{color:'var(--t1)'}}>5.</strong> Results appear in Dashboard tabs</p>
+          <hr style={{border:'none',borderTop:'1px solid var(--b1)',margin:'12px 0'}}/>
+          <p style={{fontSize:12}}>~250 matches = 3-4 hours</p>
+          <p style={{fontSize:12}}>Safe to stop and restart</p>
+        </div>
+      </div>
+      <div className="card">
+        <div className="card-h">Supported Leagues</div>
+        <div style={{display:'flex',flexWrap:'wrap',gap:5}}>
+          {['Premier League','La Liga','Serie A','Bundesliga','Ligue 1','Champions League','MLS'].map(c=>(
+            <span key={c} className="pill pill-bl">{c}</span>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>);
+}
+
+// ═══════════════════════════════════════════════════════════
+// MANUAL INPUT
+// ═══════════════════════════════════════════════════════════
+function ManualView({onDone}) {
+  const [url, setUrl] = useState('');
+  const [html, setHtml] = useState('');
+  const [result, setResult] = useState(null);
+
+  const handleParse = () => {
+    if(!url || !html) return;
+    setResult(null);
+    fetch(`${API}/api/parse`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url, html})})
+      .then(r => r.json())
+      .then(d => {
+        if(d.status === 'ok') {
+          setResult({ok: true, match: d.match});
+          onDone();
+        } else {
+          setResult({ok: false, error: d.detail || 'Parse failed'});
+        }
+      })
+      .catch(e => setResult({ok: false, error: e.message}));
+  };
+
+  return (<div className="cols">
+    <div className="card">
+      <div className="card-h">Manual HTML Input</div>
+      <p style={{fontSize:13,color:'var(--t2)',marginBottom:14}}>Paste the view-source HTML of an FBref match report — works as a fallback if the automated scraper can't reach FBref.</p>
+      <div style={{marginBottom:12}}>
+        <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--t3)',marginBottom:5,textTransform:'uppercase',letterSpacing:'.5px'}}>FBref Match URL</label>
+        <input className="inp" style={{width:'100%'}} placeholder="https://fbref.com/en/matches/..." value={url} onChange={e=>setUrl(e.target.value)}/>
+      </div>
+      <div style={{marginBottom:12}}>
+        <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--t3)',marginBottom:5,textTransform:'uppercase',letterSpacing:'.5px'}}>Page HTML</label>
+        <textarea className="inp" placeholder="Paste full HTML source here..." value={html} onChange={e=>setHtml(e.target.value)} style={{minHeight:140}}/>
+      </div>
+      <button className="btn btn-g" onClick={handleParse}>Parse & Save</button>
+      {result && (
+        <div style={{marginTop:12,padding:10,borderRadius:'var(--rad)',background:result.ok?'var(--gd)':'var(--rd)',color:result.ok?'var(--g)':'var(--r)',fontSize:12}}>
+          {result.ok ? `Saved: ${result.match?.home_team} ${result.match?.home_goals}-${result.match?.away_goals} ${result.match?.away_team}` : `Error: ${result.error}`}
+        </div>
+      )}
+    </div>
+    <div className="card">
+      <div className="card-h">Instructions</div>
+      <div style={{fontSize:13,lineHeight:1.8,color:'var(--t2)'}}>
+        <p><strong style={{color:'var(--t1)'}}>1.</strong> Open FBref match page in your browser</p>
+        <p><strong style={{color:'var(--t1)'}}>2.</strong> Right-click &#8594; View Page Source</p>
+        <p><strong style={{color:'var(--t1)'}}>3.</strong> Select All + Copy</p>
+        <p><strong style={{color:'var(--t1)'}}>4.</strong> Paste HTML here &#8594; Parse & Save</p>
+      </div>
+    </div>
+  </div>);
+}
+
+// ═══════════════════════════════════════════════════════════
+// MATCH DETAIL MODAL
+// ═══════════════════════════════════════════════════════════
+function Modal({m, onClose}) {
+  const [playerTab, setPlayerTab] = useState(null);
+  const [playerData, setPlayerData] = useState(null);
+
+  // Load player stats if match has them
+  useEffect(() => {
+    if(m.has_players && m.url) {
+      const parts = m.url.split('/');
+      const matchId = parts[parts.indexOf('matches') + 1];
+      if(matchId) {
+        fetch(`${API}/api/players/${matchId}`).then(r=>r.json()).then(d => {
+          setPlayerData(d);
+          const keys = Object.keys(d);
+          if(keys.length > 0) setPlayerTab(keys[0]);
+        }).catch(()=>{});
+      }
+    }
+  }, [m]);
+
+  const statRows = [
+    ['Possession', m.home_possession, m.away_possession, '%'],
+    ['Shots', m.home_shots_total, m.away_shots_total],
+    ['On Target', m.home_shots_on_target, m.away_shots_on_target],
+    ['Saves', m.home_saves, m.away_saves],
+    ['Fouls', m.home_fouls, m.away_fouls],
+    ['Corners', m.home_corners, m.away_corners],
+    ['Crosses', m.home_crosses, m.away_crosses],
+    ['Interceptions', m.home_interceptions, m.away_interceptions],
+    ['Yellow Cards', m.home_cards_yellow, m.away_cards_yellow],
+    ['Red Cards', m.home_cards_red, m.away_cards_red],
+  ].filter(r => r[1] != null);
+
+  return (<div className="modal-bg" onClick={onClose}>
+    <div className="modal" onClick={e=>e.stopPropagation()}>
+      <div className="modal-h">
+        <h2>{m.home_team} {m.home_goals} - {m.away_goals} {m.away_team}</h2>
+        <button className="btn btn-sm" onClick={onClose}>&#10005;</button>
+      </div>
+
+      {/* Metadata pills */}
+      <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:14,fontSize:12,color:'var(--t2)'}}>
+        {m.date && <span className="pill pill-bl">{m.date}</span>}
+        {m.competition && <span className="pill pill-bl">{m.competition}</span>}
+        {m.round && <span className="pill pill-bl">{m.round}</span>}
+        {m.venue && <span>&#128205; {m.venue}</span>}
+        {m.attendance && <span>&#128101; {Number(m.attendance).toLocaleString()}</span>}
+        {m.referee && <span>&#128993; {m.referee}</span>}
+      </div>
+
+      {/* xG + Result cards */}
+      <div style={{display:'flex',gap:12,marginBottom:16}}>
+        <div className="sc" style={{flex:1,background:'var(--s2)'}}>
+          <div className="sv" style={{fontSize:22}}>{m.home_xg != null ? Number(m.home_xg).toFixed(1) : '—'}</div>
+          <div className="sl">Home xG</div>
+        </div>
+        <div className="sc" style={{flex:1,background:m.outcome==='HOME_WIN'?'var(--gd)':m.outcome==='AWAY_WIN'?'var(--rd)':'var(--ad)'}}>
+          <div className="sv" style={{fontSize:22,color:m.outcome==='HOME_WIN'?'var(--g)':m.outcome==='AWAY_WIN'?'var(--r)':'var(--a)'}}>
+            {m.outcome==='HOME_WIN'?'Home Win':m.outcome==='AWAY_WIN'?'Away Win':'Draw'}
+          </div>
+          <div className="sl">Result</div>
+        </div>
+        <div className="sc" style={{flex:1,background:'var(--s2)'}}>
+          <div className="sv" style={{fontSize:22}}>{m.away_xg != null ? Number(m.away_xg).toFixed(1) : '—'}</div>
+          <div className="sl">Away xG</div>
+        </div>
+      </div>
+
+      {/* Team Stats Bars */}
+      <div className="card" style={{marginBottom:12}}>
+        <div className="card-h">Team Stats</div>
+        {statRows.map(([label,h,a,suf]) => {
+          const mx = Math.max(h||0,a||0,1);
+          return (
+            <div key={label} style={{display:'grid',gridTemplateColumns:'55px 1fr 80px 1fr 55px',gap:8,alignItems:'center',padding:'5px 0',fontSize:12}}>
+              <span style={{textAlign:'right',fontFamily:'JetBrains Mono'}}>{h}{suf||''}</span>
+              <div style={{height:4,background:'var(--s3)',borderRadius:2,direction:'rtl'}}>
+                <div style={{height:'100%',width:`${((h||0)/mx)*100}%`,background:'var(--bl)',borderRadius:2}}></div>
+              </div>
+              <span style={{textAlign:'center',color:'var(--t3)',fontSize:11}}>{label}</span>
+              <div style={{height:4,background:'var(--s3)',borderRadius:2}}>
+                <div style={{height:'100%',width:`${((a||0)/mx)*100}%`,background:'var(--r)',borderRadius:2,opacity:.7}}></div>
+              </div>
+              <span style={{fontFamily:'JetBrains Mono'}}>{a}{suf||''}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Player Stats */}
+      {playerData && Object.keys(playerData).length > 0 && (
+        <div className="card" style={{marginBottom:0}}>
+          <div className="card-h">Player Stats</div>
+          <div className="ptabs">
+            {Object.keys(playerData).map(key => (
+              <button key={key} className={`ptab ${playerTab===key?'on':''}`} onClick={()=>setPlayerTab(key)}>
+                {key.replace(/_/g,' ')}
+              </button>
+            ))}
+          </div>
+          {playerTab && playerData[playerTab] && (
+            <div className="tw" style={{maxHeight:300,overflowY:'auto'}}>
+              <table>
+                <thead><tr>
+                  {Object.keys(playerData[playerTab][0] || {}).map(k => <th key={k}>{k}</th>)}
+                </tr></thead>
+                <tbody>
+                  {playerData[playerTab].map((p,i) => (
+                    <tr key={i}>
+                      {Object.values(p).map((v,j) => <td key={j}>{v ?? '—'}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  </div>);
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
