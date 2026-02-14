@@ -1,6 +1,9 @@
 """
-FBref Scraper — Playwright headless browser with stealth anti-detection.
+FBref Scraper — Playwright browser with stealth anti-detection.
 Handles Cloudflare challenges, rate limiting, retry logic, and HTML caching.
+
+In headful mode, uses your real Chrome install with a persistent profile
+so Cloudflare sees a real browser and you can solve challenges manually.
 """
 
 import time
@@ -17,13 +20,9 @@ MAX_DELAY = 75
 CACHE_DIR = Path(os.environ.get("CACHE_DIR", os.path.join(os.path.dirname(__file__), "..", "data", "html_cache")))
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-USER_AGENTS = [
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-]
+# Persistent browser profile dir (survives restarts, keeps Cloudflare cookies)
+PROFILE_DIR = Path(os.path.join(os.path.dirname(__file__), "..", "data", "browser_profile"))
+PROFILE_DIR.mkdir(parents=True, exist_ok=True)
 
 COMP_IDS = {
     "premier-league": 9,
@@ -63,7 +62,9 @@ class FBrefScraper:
         self.headless = headless
         self.use_cache = use_cache
         self.on_log = on_log
-        self.pw = self.browser = self.ctx = None
+        self.pw = None
+        self.browser = None  # only used in headless mode
+        self.ctx = None
         self._n = 0
 
     def log(self, msg):
@@ -73,36 +74,47 @@ class FBrefScraper:
 
     def start(self):
         self.pw = sync_playwright().start()
-        self.browser = self.pw.chromium.launch(
-            headless=self.headless,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--disable-features=IsolateOrigins,site-per-process",
-                "--no-sandbox",
-            ],
-        )
-        ua = random.choice(USER_AGENTS)
-        self.ctx = self.browser.new_context(
-            user_agent=ua,
-            viewport={"width": 1920, "height": 1080},
-            locale="en-US",
-            timezone_id="America/New_York",
-            extra_http_headers={
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Encoding": "gzip, deflate, br",
-                "DNT": "1",
-                "Connection": "keep-alive",
-                "Upgrade-Insecure-Requests": "1",
-            },
-        )
-        self.ctx.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', { get: () => false });
-            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-            window.chrome = { runtime: {} };
-        """)
-        self.log(f"[BROWSER] Launched (headless={self.headless})")
+
+        if self.headless:
+            # Headless: use Playwright's bundled browser
+            self.browser = self.pw.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-features=IsolateOrigins,site-per-process",
+                    "--no-sandbox",
+                ],
+            )
+            self.ctx = self.browser.new_context(
+                viewport={"width": 1920, "height": 1080},
+                locale="en-US",
+                timezone_id="America/New_York",
+            )
+            self.ctx.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', { get: () => false });
+                window.chrome = { runtime: {} };
+            """)
+        else:
+            # Headful: use real Chrome install with persistent profile
+            # This looks like a real user browser to Cloudflare
+            self.ctx = self.pw.chromium.launch_persistent_context(
+                user_data_dir=str(PROFILE_DIR),
+                headless=False,
+                channel="chrome",  # Use real installed Chrome
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox",
+                ],
+                viewport={"width": 1280, "height": 900},
+                locale="en-US",
+                timezone_id="America/New_York",
+            )
+            self.ctx.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', { get: () => false });
+            """)
+
+        mode = "headful (real Chrome)" if not self.headless else "headless"
+        self.log(f"[BROWSER] Launched ({mode})")
 
     def stop(self):
         if self.ctx:
@@ -117,7 +129,7 @@ class FBrefScraper:
         cp = cache_path(url)
         if self.use_cache and cp.exists():
             html = cp.read_text(encoding="utf-8")
-            if len(html) > 1000 and "scorebox" in html:
+            if len(html) > 1000 and ("scorebox" in html or "sched" in html):
                 self.log(f"[CACHE HIT] {url.split('/')[-2]}")
                 return html
 
@@ -135,7 +147,7 @@ class FBrefScraper:
                 self.log(f"[FETCH] Attempt {attempt + 1}/3: {url.split('/')[-2] if '/' in url else url}")
                 resp = page.goto(url, wait_until="domcontentloaded", timeout=90000)
 
-                # Give the page a few seconds for JS to render remaining content
+                # Give the page a few seconds for JS to render
                 time.sleep(random.uniform(3, 6))
 
                 if resp and resp.status == 429:
@@ -145,21 +157,22 @@ class FBrefScraper:
                     continue
 
                 # Check for Cloudflare challenge
-                title = page.title()
-                if "Just a moment" in title or "Attention Required" in title:
+                title = page.title() or ""
+                if "Just a moment" in title or "Attention Required" in title or "security" in title.lower():
                     if not self.headless:
                         # Headful mode: wait for user to solve it manually
                         self.log("  [WAITING] Solve the Cloudflare challenge in the browser window...")
                         solved = False
-                        for _ in range(60):  # Poll for up to 120 seconds
+                        for _ in range(90):  # Poll for up to 180 seconds
                             time.sleep(2)
                             try:
-                                current_title = page.title()
+                                current_title = page.title() or ""
                             except Exception:
                                 break
-                            if "Just a moment" not in current_title and "Attention Required" not in current_title:
+                            if ("Just a moment" not in current_title
+                                    and "Attention Required" not in current_title
+                                    and "security" not in current_title.lower()):
                                 self.log("  [OK] Cloudflare challenge solved!")
-                                # Wait a moment for the page to fully load after solve
                                 time.sleep(3)
                                 solved = True
                                 break
@@ -167,14 +180,13 @@ class FBrefScraper:
                             self.log("  [CLOUDFLARE] Timed out waiting for manual solve")
                             continue
                     else:
-                        # Headless mode: wait briefly and retry
                         self.log("  [CLOUDFLARE] Challenge detected, waiting 15s...")
                         time.sleep(15)
                         try:
                             page.wait_for_load_state("domcontentloaded", timeout=30000)
                         except Exception:
                             pass
-                        if "Just a moment" in page.title():
+                        if "Just a moment" in (page.title() or ""):
                             self.log("  [CLOUDFLARE] Still blocked")
                             continue
 
@@ -184,8 +196,10 @@ class FBrefScraper:
                     self.log(f"  [WARN] Response too short ({len(html)} chars)")
                     continue
 
-                if "scorebox" not in html and "team_stats" not in html and "sched" not in html and "scores" not in html.lower():
-                    if "404" in (page.title() or "") or "Not Found" in (page.title() or ""):
+                if ("scorebox" not in html and "team_stats" not in html
+                        and "sched" not in html and "scores" not in html.lower()):
+                    page_title = page.title() or ""
+                    if "404" in page_title or "Not Found" in page_title:
                         raise RuntimeError("PAGE_NOT_FOUND")
                     self.log("  [WARN] Missing expected elements")
                     continue
