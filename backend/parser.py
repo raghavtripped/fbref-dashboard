@@ -199,6 +199,37 @@ def parse_player_table(soup, table_id):
     return players
 
 
+def parse_all_tables_generic(soup):
+    """Generic fallback: extract all <table> elements with data-stat attributes.
+    This captures any tables the specific parsers might have missed."""
+    extra_data = {}
+    parsed_table_ids = {"team_stats", "player_stats"}  # Already parsed by specific functions
+
+    for table in soup.find_all("table"):
+        table_id = table.get("id", "")
+        if not table_id or table_id in parsed_table_ids:
+            continue
+
+        # Skip player stat tables (already parsed)
+        if "stats_" in table_id or "keeper_stats" in table_id:
+            continue
+
+        rows = []
+        for tr in table.find_all("tr"):
+            row = {}
+            for td in tr.find_all(["td", "th"]):
+                stat = td.get("data-stat", "")
+                if stat:
+                    row[stat] = td.get_text(strip=True)
+            if row:
+                rows.append(row)
+
+        if rows:
+            extra_data[table_id] = rows
+
+    return extra_data
+
+
 def parse_match_report(url, html):
     """Main parser: extracts everything from an FBref match report page."""
     soup = preprocess_html(html)
@@ -322,6 +353,12 @@ def parse_match_report(url, html):
             player_stats[f"{side}_gk"] = gk
 
     result["_player_stats"] = player_stats
+
+    # Generic fallback: capture any other tables we might have missed
+    extra_tables = parse_all_tables_generic(soup)
+    if extra_tables:
+        result["_extra_tables"] = extra_tables
+
     return result
 
 

@@ -38,6 +38,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--t1);min-h
 .btn-g{background:var(--g);color:var(--bg);border-color:var(--g);font-weight:600}
 .btn-g:hover{background:#2bc48a}
 .btn-r{background:var(--r);color:#fff;border-color:var(--r);font-weight:600}
+.btn-a{background:var(--a);color:var(--bg);border-color:var(--a);font-weight:600}
+.btn-a:hover{background:#f59e0b}
 .btn-sm{padding:4px 9px;font-size:11px}
 
 /* Tabs */
@@ -103,6 +105,10 @@ textarea.inp{resize:vertical;font-family:'JetBrains Mono',monospace;font-size:12
 .ptabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px}
 .ptab{padding:3px 10px;border-radius:4px;font-size:10px;cursor:pointer;color:var(--t3);border:1px solid var(--b1);background:var(--s2);font-family:inherit;font-weight:500}
 .ptab.on{background:var(--bl);color:#fff;border-color:var(--bl)}
+
+/* Spinner */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{display:inline-block;width:10px;height:10px;border:2px solid var(--b1);border-top-color:var(--g);border-radius:50%;animation:spin .6s linear infinite}
 </style>
 </head>
 <body>
@@ -131,6 +137,38 @@ function App() {
   const { data: matchData, loading, reload } = useApi('/api/matches');
   const matches = matchData?.matches || [];
 
+  // Scraper status polling (lifted to App level so it persists across tab switches)
+  const [polling, setPolling] = useState(false);
+  const [scraperStatus, setScraperStatus] = useState(null);
+
+  // Poll scraper status (runs in background even when not on Scraper tab)
+  useEffect(() => {
+    if (!polling) return;
+    const iv = setInterval(() => {
+      fetch(`${API}/api/scraper/status`)
+        .then(r => r.json())
+        .then(s => {
+          setScraperStatus(s);
+          if (!s.running) {
+            setPolling(false);
+            reload();  // Refresh matches when scraping completes
+          }
+        })
+        .catch(() => {});
+    }, 2000);
+    return () => clearInterval(iv);
+  }, [polling, reload]);
+
+  // Check scraper status on mount (resume polling if scraper is already running)
+  useEffect(() => {
+    fetch(`${API}/api/scraper/status`)
+      .then(r => r.json())
+      .then(s => {
+        setScraperStatus(s);
+        if (s.running) setPolling(true);
+      });
+  }, []);
+
   const stats = useMemo(() => {
     const oc = {HOME_WIN:0,AWAY_WIN:0,DRAW:0};
     let tg=0, tc=0, teams=new Set(), refs=new Set();
@@ -146,7 +184,24 @@ function App() {
       <div className="hdr">
         <h1><span className="dot"></span>FBref Dashboard</h1>
         <div className="hdr-r">
-          <span className="badge">{matches.length} matches</span>
+          {scraperStatus?.running && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '5px 10px',
+              borderRadius: 'var(--rad)',
+              background: scraperStatus.paused ? 'var(--ad)' : 'var(--gd)',
+              border: scraperStatus.paused ? '1px solid var(--a)' : '1px solid var(--g)',
+              fontSize: 11,
+              fontWeight: 600,
+              color: scraperStatus.paused ? 'var(--a)' : 'var(--g)'
+            }}>
+              <div className="dot" style={{width:5,height:5,boxShadow:scraperStatus.paused ? '0 0 6px var(--a)' : '0 0 6px var(--g)'}}></div>
+              {scraperStatus.paused ? 'Paused' : `Scraping ${scraperStatus.progress}/${scraperStatus.total}`}
+            </div>
+          )}
+          <span style={{fontSize:11,color:'var(--t3)'}}>{matches.length} matches</span>
           <button className="btn" onClick={reload}>&#8635; Refresh</button>
           <button className="btn" onClick={() => {
             if(matches.length === 0) return;
@@ -162,7 +217,7 @@ function App() {
       {loading && matches.length === 0 && <div style={{textAlign:'center',padding:40,color:'var(--t3)'}}>Loading...</div>}
       {tab==='dashboard' && <Dashboard stats={stats} matches={matches} />}
       {tab==='matches' && <MatchTable matches={matches} onSel={setSel} />}
-      {tab==='scraper' && <ScraperView onDone={reload} />}
+      {tab==='scraper' && <ScraperView onDone={reload} status={scraperStatus} polling={polling} setPolling={setPolling} />}
       {tab==='manual' && <ManualView onDone={reload} />}
       {sel && <Modal m={sel} onClose={()=>setSel(null)} />}
     </div>
@@ -351,39 +406,46 @@ function MatchTable({matches, onSel}) {
 // ═══════════════════════════════════════════════════════════
 // SCRAPER CONTROLS
 // ═══════════════════════════════════════════════════════════
-function ScraperView({onDone}) {
+function ScraperView({onDone, status, polling, setPolling}) {
   const [mode, setMode] = useState('urls'); // urls | discover
   const [urls, setUrls] = useState('');
   const [comp, setComp] = useState('premier-league');
   const [season, setSeason] = useState('2025-2026');
   const [headful, setHeadful] = useState(true);
-  const [status, setStatus] = useState(null);
-  const [polling, setPolling] = useState(false);
   const logRef = useRef(null);
 
-  // Poll status while scraping
+  // Auto-scroll log to bottom when status updates
   useEffect(() => {
-    if(!polling) return;
-    const iv = setInterval(() => {
-      fetch(`${API}/api/scraper/status`).then(r=>r.json()).then(s => {
-        setStatus(s);
-        if(!s.running) { setPolling(false); onDone(); }
-        if(logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
-      }).catch(()=>{});
-    }, 2000);
-    return () => clearInterval(iv);
-  },[polling, onDone]);
+    if (logRef.current) {
+      logRef.current.scrollTop = logRef.current.scrollHeight;
+    }
+  }, [status]);
 
   const startScrape = () => {
     const body = mode === 'urls'
       ? { urls: urls.split('\n').map(u=>u.trim()).filter(u=>u && u.includes('fbref.com')), headful }
       : { competition: comp, season, headful };
+
+    setPolling(true);  // Start polling immediately
+
     fetch(`${API}/api/scrape`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
-      .then(r=>{if(r.ok){setPolling(true);setStatus({running:true,log:['Starting...'],progress:0,total:0})}});
+      .then(r => {
+        if (!r.ok) {
+          setPolling(false);
+        }
+      });
   };
 
   const stopScrape = () => {
     fetch(`${API}/api/scraper/stop`, {method:'POST'});
+  };
+
+  const pauseScrape = () => {
+    fetch(`${API}/api/scraper/pause`, {method:'POST'});
+  };
+
+  const resumeScrape = () => {
+    fetch(`${API}/api/scraper/resume`, {method:'POST'});
   };
 
   const parseCached = () => {
@@ -430,8 +492,16 @@ function ScraperView({onDone}) {
         <div style={{display:'flex',gap:8}}>
           {!status?.running ? (
             <button className="btn btn-g" onClick={startScrape}>&#9654; Start Scraping</button>
+          ) : status?.paused ? (
+            <>
+              <button className="btn btn-g" onClick={resumeScrape}>&#9654; Resume</button>
+              <button className="btn btn-r" onClick={stopScrape}>&#9632; Stop</button>
+            </>
           ) : (
-            <button className="btn btn-r" onClick={stopScrape}>&#9632; Stop</button>
+            <>
+              <button className="btn btn-a" onClick={pauseScrape}>&#9208; Pause</button>
+              <button className="btn btn-r" onClick={stopScrape}>&#9632; Stop</button>
+            </>
           )}
           <button className="btn" onClick={parseCached}>Parse Cached HTML</button>
         </div>
@@ -442,7 +512,10 @@ function ScraperView({onDone}) {
         <div className="card">
           <div className="card-h">Progress</div>
           <div style={{display:'flex',justifyContent:'space-between',fontSize:12,color:'var(--t2)',marginBottom:4}}>
-            <span>{status.running ? `Scraping: ${status.current||'...'}` : 'Idle'}</span>
+            <span style={{display:'flex',alignItems:'center',gap:6}}>
+              {status.running && !status.paused && <span className="spinner"></span>}
+              {status.running ? (status.paused ? '⏸ Paused' : `Scraping: ${status.current||'...'}`) : 'Idle'}
+            </span>
             <span>{status.progress || 0} / {status.total || 0} ({pct}%)</span>
           </div>
           <div className="prog-bar"><div className="prog-fill" style={{width:`${pct}%`}}></div></div>

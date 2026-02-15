@@ -38,6 +38,7 @@ _status = {
     "progress": 0,
     "total": 0,
     "stop": False,
+    "paused": False,
 }
 _lock = threading.Lock()
 
@@ -187,6 +188,20 @@ def stop_scrape():
     return {"status": "stopping"}
 
 
+@app.post("/api/scraper/pause")
+def pause_scrape():
+    """Pause the scraper after current URL completes."""
+    _status["paused"] = True
+    return {"status": "pausing"}
+
+
+@app.post("/api/scraper/resume")
+def resume_scrape():
+    """Resume a paused scraper."""
+    _status["paused"] = False
+    return {"status": "resuming"}
+
+
 def _run_scrape(urls, comp=None, season=None, headful=False):
     """Background scraping task."""
     with _lock:
@@ -225,6 +240,16 @@ def _run_scrape(urls, comp=None, season=None, headful=False):
             for i, url in enumerate(urls):
                 if _status["stop"]:
                     log("Stopped by user.")
+                    break
+
+                # Check pause state
+                while _status["paused"]:
+                    time.sleep(1)  # Wait while paused
+                    if _status["stop"]:  # Allow stop while paused
+                        log("Stopped by user.")
+                        break
+
+                if _status["stop"]:
                     break
 
                 slug = url.split("/")[-1] if "/" in url else url
